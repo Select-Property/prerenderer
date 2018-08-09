@@ -16,6 +16,13 @@ const waitForRender = function (options) {
         resolve()
       )
 
+      // Render once a specific element exists.
+    } else if (options.renderAfterElementExists) {
+      // TODO: Try and get something MutationObserver-based working.
+      setInterval(() => {
+        if (document.querySelector(options.renderAfterElementExists)) resolve()
+      }, 100)
+
       // Render after a certain number of milliseconds.
     } else if (options.renderAfterTime) {
       setTimeout(() => resolve(), options.renderAfterTime)
@@ -131,14 +138,6 @@ class PuppeteerRenderer {
             timeout: options.timeout || 30000
           })
 
-          // Wait for some specific element exists
-          const { renderAfterElementExists } = this._rendererOptions
-          if (
-            renderAfterElementExists &&
-            typeof renderAfterElementExists === 'string'
-          ) {
-            await page.waitForSelector(renderAfterElementExists)
-          }
           // Once this completes, it's safe to capture the page contents.
           await page.evaluate(waitForRender, this._rendererOptions)
 
@@ -149,7 +148,7 @@ class PuppeteerRenderer {
           }
 
           await page.close()
-          return result
+          return Promise.resolve(result)
         })
       )
     )
