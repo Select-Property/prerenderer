@@ -7,14 +7,20 @@ const waitForRender = function (options) {
   return new Promise((resolve, reject) => {
     // Render when an event fires on the document.
     if (options.renderAfterDocumentEvent) {
-      if (window['__PRERENDER_STATUS'] && window['__PRERENDER_STATUS'].__DOCUMENT_EVENT_RESOLVED) resolve()
-      document.addEventListener(options.renderAfterDocumentEvent, () => resolve())
+      if (
+        window['__PRERENDER_STATUS'] &&
+        window['__PRERENDER_STATUS'].__DOCUMENT_EVENT_RESOLVED
+      )
+        resolve()
+      document.addEventListener(options.renderAfterDocumentEvent, () =>
+        resolve()
+      )
 
-    // Render after a certain number of milliseconds.
+      // Render after a certain number of milliseconds.
     } else if (options.renderAfterTime) {
       setTimeout(() => resolve(), options.renderAfterTime)
 
-    // Default: Render immediately after page content loads.
+      // Default: Render immediately after page content loads.
     } else {
       resolve()
     }
@@ -26,7 +32,8 @@ class PuppeteerRenderer {
     this._puppeteer = null
     this._rendererOptions = rendererOptions || {}
 
-    if (this._rendererOptions.maxConcurrentRoutes == null) this._rendererOptions.maxConcurrentRoutes = 0
+    if (this._rendererOptions.maxConcurrentRoutes == null)
+      this._rendererOptions.maxConcurrentRoutes = 0
 
     if (this._rendererOptions.inject && !this._rendererOptions.injectProperty) {
       this._rendererOptions.injectProperty = '__PRERENDER_INJECTED'
@@ -48,7 +55,9 @@ class PuppeteerRenderer {
       this._puppeteer = await puppeteer.launch(this._rendererOptions)
     } catch (e) {
       console.error(e)
-      console.error('[Prerenderer - PuppeteerRenderer] Unable to start Puppeteer')
+      console.error(
+        '[Prerenderer - PuppeteerRenderer] Unable to start Puppeteer'
+      )
       // Re-throw the error so it can be handled further up the chain. Good idea or not?
       throw e
     }
@@ -79,56 +88,69 @@ class PuppeteerRenderer {
     const limiter = promiseLimit(this._rendererOptions.maxConcurrentRoutes)
 
     const pagePromises = Promise.all(
-      routes.map(
-        (route, index) => limiter(
-          async () => {
-            const page = await this._puppeteer.newPage()
+      routes.map((route, index) =>
+        limiter(async () => {
+          const page = await this._puppeteer.newPage()
 
-            if (options.consoleHandler) {
-              page.on('console', message => options.consoleHandler(route, message))
-            }
-
-            if (options.inject) {
-              await page.evaluateOnNewDocument(`(function () { window['${options.injectProperty}'] = ${JSON.stringify(options.inject)}; })();`)
-            }
-
-            const baseURL = `http://localhost:${rootOptions.server.port}`
-
-            // Allow setting viewport widths and such.
-            if (options.viewport) await page.setViewport(options.viewport)
-
-            await this.handleRequestInterception(page, baseURL)
-
-            // Hack just in-case the document event fires before our main listener is added.
-            if (options.renderAfterDocumentEvent) {
-              page.evaluateOnNewDocument(function (options) {
-                window['__PRERENDER_STATUS'] = {}
-                document.addEventListener(options.renderAfterDocumentEvent, () => {
-                  window['__PRERENDER_STATUS'].__DOCUMENT_EVENT_RESOLVED = true
-                })
-              }, this._rendererOptions)
-            }
-
-            await page.goto(`${baseURL}${route}`, { waituntil: 'networkidle0' })
-
-            // Wait for some specific element exists
-            const { renderAfterElementExists } = this._rendererOptions
-            if (renderAfterElementExists && typeof renderAfterElementExists === 'string') {
-              await page.waitForSelector(renderAfterElementExists)
-            }
-            // Once this completes, it's safe to capture the page contents.
-            await page.evaluate(waitForRender, this._rendererOptions)
-
-            const result = {
-              originalRoute: route,
-              route: await page.evaluate('window.location.pathname'),
-              html: await page.content()
-            }
-
-            await page.close()
-            return result
+          if (options.consoleHandler) {
+            page.on('console', message =>
+              options.consoleHandler(route, message)
+            )
           }
-        )
+
+          if (options.inject) {
+            await page.evaluateOnNewDocument(
+              `(function () { window['${
+                options.injectProperty
+              }'] = ${JSON.stringify(options.inject)}; })();`
+            )
+          }
+
+          const baseURL = `http://localhost:${rootOptions.server.port}`
+
+          // Allow setting viewport widths and such.
+          if (options.viewport) await page.setViewport(options.viewport)
+
+          await this.handleRequestInterception(page, baseURL)
+
+          // Hack just in-case the document event fires before our main listener is added.
+          if (options.renderAfterDocumentEvent) {
+            page.evaluateOnNewDocument(function (options) {
+              window['__PRERENDER_STATUS'] = {}
+              document.addEventListener(
+                options.renderAfterDocumentEvent,
+                () => {
+                  window['__PRERENDER_STATUS'].__DOCUMENT_EVENT_RESOLVED = true
+                }
+              )
+            }, this._rendererOptions)
+          }
+
+          await page.goto(`${baseURL}${route}`, {
+            waituntil: 'networkidle0',
+            timeout: options.timeout || 30000
+          })
+
+          // Wait for some specific element exists
+          const { renderAfterElementExists } = this._rendererOptions
+          if (
+            renderAfterElementExists &&
+            typeof renderAfterElementExists === 'string'
+          ) {
+            await page.waitForSelector(renderAfterElementExists)
+          }
+          // Once this completes, it's safe to capture the page contents.
+          await page.evaluate(waitForRender, this._rendererOptions)
+
+          const result = {
+            originalRoute: route,
+            route: await page.evaluate('window.location.pathname'),
+            html: await page.content()
+          }
+
+          await page.close()
+          return result
+        })
       )
     )
 

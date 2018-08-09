@@ -220,7 +220,10 @@ var PuppeteerRenderer = function () {
                             }
 
                             _context3.next = 16;
-                            return page.goto(`${baseURL}${route}`, { waituntil: 'networkidle0' });
+                            return page.goto(`${baseURL}${route}`, {
+                              waituntil: 'networkidle0',
+                              timeout: options.timeout || 30000
+                            });
 
                           case 16:
 
